@@ -1,0 +1,3 @@
+#!/home/usx/war/fiberfox/venv/bin/python
+from ldapdomaindump import convert
+convert.ldd2bloodhound()
