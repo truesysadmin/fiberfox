@@ -12,3 +12,4 @@ test/*.html
 .vscode
 
 Makefile
+.zencoder
